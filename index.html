@@ -37,8 +37,8 @@ label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin:0 0 5
 .ttl small{color:var(--mut);font-size:12px}
 .ttl .bc{color:var(--pri);cursor:pointer;font-weight:600}
 .tright{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.upd{font-size:12px;color:var(--mut)}
-.av{display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid var(--bd);font-weight:800;font-size:12px}
+.upd{font-size:12px;color:var(--mut);white-space:nowrap}
+.av{display:flex;align-items:center;gap:8px;white-space:nowrap;padding-left:12px;border-left:1px solid var(--bd);font-weight:800;font-size:12px}
 .av i{font-style:normal;width:32px;height:32px;border-radius:50%;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px}
 .ib{width:38px;height:38px;border-radius:11px;border:1px solid var(--bd);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx)}
 .ib:hover{background:var(--soft)}
@@ -99,6 +99,31 @@ body.side .dock{display:none}
 .hcell small{display:block;color:var(--mut);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:14px}
 .hcell .rp{font-size:16px;font-weight:800;color:var(--pri);margin-top:6px}
 .hcell .us{font-size:11px;color:var(--mut)}
+/* harga kartu seragam */
+.hcell .rp{white-space:nowrap}
+.hcell .rp.rg{font-size:13.5px}
+.hgrid.one{grid-template-columns:repeat(6,minmax(0,1fr))}
+/* tugas hari ini */
+.todo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:22px}
+.td{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:14px 16px;box-shadow:var(--sh);display:flex;gap:12px;align-items:flex-start}
+.td .dot{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.td .dot svg.i{width:17px;height:17px}
+.td.ok .dot{background:#e3f6ea;color:#0d7a3c}.td.warn .dot{background:#fff3df;color:#a05f00}.td.bad .dot{background:#fdeef1;color:#c42b42}
+.td b{display:block;font-size:13.5px;font-weight:800}
+.td p{margin:3px 0 0;font-size:12px;color:var(--mut);line-height:1.5}
+.td p .lk{font-size:12px}
+/* pencarian global */
+.gs{position:relative}
+.gs input{width:190px;border:1px solid var(--bd);background:#f7f9fe;border-radius:10px;padding:9px 12px 9px 34px;font-size:13px}
+.gs input:focus{outline:3px solid #dbe5ff;border-color:var(--pri);background:#fff}
+.gs svg.i{position:absolute;left:10px;top:9px;width:16px;height:16px;color:var(--mut)}
+.gsr{position:absolute;top:44px;right:0;width:340px;background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 20px 50px rgba(13,33,96,.18);z-index:20;max-height:380px;overflow:auto}
+.gsr div{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--bd)}
+.gsr div:hover,.gsr div.on{background:var(--soft)}
+.gsr b{display:block;font-size:13px}
+.gsr small{color:var(--mut);font-size:11.5px}
+@media (max-width:1250px){.av span{display:none}}
+@media (max-width:900px){.todo{grid-template-columns:1fr}.hgrid.one{grid-template-columns:repeat(2,minmax(0,1fr))}.gs{display:none}}
 /* popup modul */
 #mpop .mbg{z-index:25;align-items:center;background:rgba(11,22,48,.35)}
 .mpop{background:#fff;border-radius:18px;width:min(380px,100%);padding:18px;box-shadow:0 30px 80px rgba(13,33,96,.3)}
@@ -245,6 +270,7 @@ td input.inp{padding:6px 8px;width:110px;text-align:right}
     <div class="ttl" id="ttl"></div>
     <div class="hbrand"><div class="logos" id="hLogos"></div><div class="brandtx">SALES <span>REPORT</span></div></div>
     <div class="tright">
+      <div class="gs" id="gs"></div>
       <span class="upd" id="upd"></span>
       <div class="av"><i>SPV</i><span>SPV SALES</span></div>
       <button class="ib" title="Muat ulang data" onclick="reload()" id="icR"></button>
@@ -297,6 +323,8 @@ const IC = {
   save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
   pin:'<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  search:'<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  alert:'<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
   panelL:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>',
   panelB:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/>',
   box:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/>'
@@ -397,6 +425,7 @@ function startApp(){
   document.getElementById('app').classList.remove('hide');
   document.getElementById('icR').innerHTML = ic('refresh');
   document.getElementById('icL').innerHTML = ic('logout');
+  document.getElementById('gs').innerHTML = `${ic('search')}<input id="gsI" placeholder="Cari perusahaan..." autocomplete="off" oninput="gSearch(this.value)" onkeydown="gKey(event)" onblur="setTimeout(gClose,200)"><div class="gsr hide" id="gsR"></div>`;
   go('home');
 }
 function logout(){ ls('sr_tok', null); location.reload(); }
@@ -416,6 +445,7 @@ function moduleOf(k){ return MODULES.find(m => m.m.includes(k)); }
 function go(p){
   if(p.startsWith('mod:')){ openModule(p.slice(4)); return; }
   closeModule();
+  if(MENUS[p]){ try{ const fq = JSON.parse(ls('sr_freq')||'{}'); fq[p] = (fq[p]||0)+1; ls('sr_freq', JSON.stringify(fq)); }catch(e){} }
   S.page = p; S.reg = [];
   const ttl = document.getElementById('ttl'), c = document.getElementById('content');
   let activeMod = null;
@@ -469,7 +499,8 @@ function closeModule(){
 }
 function menuCard(k){
   const m = MENUS[k], n = (S.data[k]||[]).length;
-  const cnt = k==='dash'||k==='report' ? 'Buka' : k==='ledger' ? companies().length+' perusahaan' : (k==='harga'||k==='hargaHist') ? distinct('harga','tanggal').length+' tanggal' : n+' data';
+  const qn = (S.data.quotation||[]).length, pn = (S.data.po||[]).length, an = (S.data.activity||[]).filter(r=>r.tanggal===today()).length;
+  const cnt = k==='dash' ? `${qn} quotation · ${pn} PO` : k==='report' ? `${an} aktivitas hari ini` : k==='ledger' ? companies().length+' perusahaan' : (k==='harga'||k==='hargaHist') ? distinct('harga','tanggal').length+' tanggal' : n+' data';
   return `<div class="mcard" onclick="go('${k}')"><div class="mic" style="${micStyle(k)}">${ic(m.i)}</div><b>${m.t}</b><em>${cnt}</em></div>`;
 }
 function homeHarga(){
@@ -477,21 +508,66 @@ function homeHarga(){
   if(!d) return `<div class="hp"><div class="hph"><b>Harga Hari Ini</b></div><div class="meta">Belum ada harga tersimpan. Isi di <span class="lk" onclick="go('harga')">Update Harga Produk</span>.</div></div>`;
   const rows = (S.data.harga||[]).filter(r => r.tanggal===d), b = rows[0] || {};
   const priced = rows.filter(r => has(r.hargaRpMin));
-  const show = priced.slice(0, 12);
+  const show = priced.slice(0, 6);
   return `<div class="hp"><div class="hph"><b>${d===t?'Harga Hari Ini':'Harga Terakhir'}</b><span class="meta">${tglPanjang(d)}</span>
       <span class="kv"><small>LME</small>$${fmtN(b.lme,2)}</span><span class="kv"><small>MJP</small>$${fmtN(b.mjp,2)}</span><span class="kv"><small>Kurs</small>Rp ${fmtN(b.kurs)}</span>
       <span style="flex:1"></span><span class="lk" onclick="S.h=null;go('harga')">Lihat semua (${rows.length}) ›</span></div>
-    <div class="hgrid">${show.map(r=>`<div class="hcell"><b title="${esc(r.produk)}">${esc(r.produk)}</b><small>${esc([r.remarks, r.pt].filter(Boolean).join(' · ') || r.rumus)}</small>
-      <div class="rp">Rp ${rangeTxt(r.hargaRpMin, r.hargaRpMax)}<span class="us"> /kg</span></div><div class="us">${has(r.hargaUsdMin)?'$'+rangeTxt(r.hargaUsdMin, r.hargaUsdMax, 2)+' /MT':'Harga pasar'}</div></div>`).join('') || '<div class="meta">Belum ada produk berharga di tanggal ini.</div>'}</div></div>`;
+    <div class="hgrid one">${show.map(r=>`<div class="hcell"><b title="${esc(r.produk)}">${esc(r.produk)}</b><small>${esc([r.remarks, r.pt].filter(Boolean).join(' · ') || r.rumus)}</small>
+      <div class="rp ${has(r.hargaRpMax)&&Number(r.hargaRpMax)!==Number(r.hargaRpMin)?'rg':''}">Rp ${rangeTxt(r.hargaRpMin, r.hargaRpMax)}<span class="us"> /kg</span></div><div class="us">${has(r.hargaUsdMin)?'$'+rangeTxt(r.hargaUsdMin, r.hargaUsdMax, 2)+' /MT':'Harga pasar'}</div></div>`).join('') || '<div class="meta">Belum ada produk berharga di tanggal ini.</div>'}</div></div>`;
+}
+function favMenus(){
+  let fq = {}; try{ fq = JSON.parse(ls('sr_freq')||'{}'); }catch(e){}
+  const used = Object.keys(fq).filter(k=>MENUS[k]).sort((a,b)=>fq[b]-fq[a]);
+  return [...new Set(used.concat(FAV))].slice(0,5);
+}
+function openNoDate(t){ fl(t).per='nodate'; go(t); }
+function openActToday(){ const F = fl('activity'); F.per='today'; go('activity'); }
+function homeTodo(){
+  const t = today();
+  // 1. harga hari ini
+  const hs = (S.data.harga||[]).some(r=>r.tanggal===t);
+  const c1 = hs ? `<div class="td ok"><div class="dot">${ic('check')}</div><div><b>Harga hari ini sudah disimpan</b><p>${tglPanjang(t)} · <span class="lk" onclick="S.h=null;go('harga')">Lihat</span></p></div></div>`
+    : `<div class="td warn"><div class="dot">${ic('dollar')}</div><div><b>Harga hari ini belum disimpan</b><p>Isi LME & MJP, kurs otomatis · <span class="lk" onclick="S.h=null;loadHarga(today());go('harga')">Isi sekarang</span></p></div></div>`;
+  // 2. data tanpa tanggal
+  const nd = PER_T.map(k => [k, (S.data[k]||[]).filter(r=>!/^\d{4}-\d{2}-\d{2}/.test(r.tanggal||'')).length]).filter(x=>x[1]);
+  const tot = nd.reduce((a,x)=>a+x[1],0);
+  const c2 = tot ? `<div class="td warn"><div class="dot">${ic('alert')}</div><div><b>${tot} data belum ada tanggal</b><p>${nd.map(x=>`<span class="lk" onclick="openNoDate('${x[0]}')">${MENUS[x[0]].t} ${x[1]}</span>`).join(' · ')}</p></div></div>`
+    : `<div class="td ok"><div class="dot">${ic('check')}</div><div><b>Semua data sudah bertanggal</b><p>Filter periode berlaku penuh</p></div></div>`;
+  // 3. daily activity hari ini
+  const sales = salesList(), done = new Set((S.data.activity||[]).filter(r=>r.tanggal===t).map(r=>String(r.sales||'').trim()));
+  const miss = sales.filter(x=>!done.has(x));
+  const c3 = !sales.length ? '' : miss.length ? `<div class="td ${done.size?'warn':'bad'}"><div class="dot">${ic('list')}</div><div><b>${miss.length} sales belum isi Daily Activity</b><p>${miss.map(esc).join(', ')} · <span class="lk" onclick="openActToday()">Lihat hari ini</span></p></div></div>`
+    : `<div class="td ok"><div class="dot">${ic('check')}</div><div><b>Semua sales sudah isi Daily Activity</b><p><span class="lk" onclick="openActToday()">Lihat aktivitas hari ini</span></p></div></div>`;
+  return `<div class="sec-t" style="margin-top:24px">Perlu dicek hari ini</div><div class="todo" style="margin-top:0">${c1}${c2}${c3}</div>`;
 }
 function renderHome(){
   document.getElementById('content').innerHTML = `
     <div class="sec-t">Sering dibuka</div>
-    <div class="chips">${FAV.map((k,i)=>`<div class="chip" onclick="go('${k}')"><span class="c${i+1}">${ic(MENUS[k].i)}</span>${MENUS[k].t}</div>`).join('')}</div>
+    <div class="chips">${favMenus().map((k,i)=>`<div class="chip" onclick="go('${k}')"><span class="c${i+1}">${ic(MENUS[k].i)}</span>${MENUS[k].t}</div>`).join('')}</div>
+    ${homeTodo()}
     ${homeHarga()}
     <div class="sec-t" style="margin-top:24px">Semua menu</div>
     <div class="mgrid">${ORDER.map(menuCard).join('')}</div>`;
 }
+
+/* ================= PENCARIAN GLOBAL ================= */
+function gSearch(q){
+  const R = document.getElementById('gsR'); q = q.toLowerCase().trim();
+  if(q.length < 2){ R.classList.add('hide'); return; }
+  const list = companies().filter(c => c.name.toLowerCase().includes(q)).slice(0, 10);
+  S.gs = list; S.gsi = 0;
+  R.innerHTML = list.length ? list.map((c,i)=>`<div class="${i===0?'on':''}" onmousedown="gPick(${i})"><b>${esc(c.name)}</b><small>${[...c.sales].map(esc).join(', ')||'–'} · ${c.quotation.length} quotation · ${c.po.length} PO</small></div>`).join('')
+    : '<div style="cursor:default"><small>Tidak ditemukan</small></div>';
+  R.classList.remove('hide');
+}
+function gKey(e){
+  const R = document.getElementById('gsR'); if(!S.gs || R.classList.contains('hide')) return;
+  if(e.key==='ArrowDown' || e.key==='ArrowUp'){ e.preventDefault(); S.gsi = (S.gsi + (e.key==='ArrowDown'?1:-1) + S.gs.length) % S.gs.length; [...R.children].forEach((d,i)=>d.classList.toggle('on', i===S.gsi)); }
+  else if(e.key==='Enter' && S.gs.length) gPick(S.gsi);
+  else if(e.key==='Escape') gClose();
+}
+function gPick(i){ const c = S.gs[i]; if(!c) return; gClose(); document.getElementById('gsI').value=''; ledger(c.name); }
+function gClose(){ const R = document.getElementById('gsR'); if(R) R.classList.add('hide'); }
 
 /* ================= HELPER DATA ================= */
 function salesList(){
