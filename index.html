@@ -23,6 +23,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke
 label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin:0 0 5px}
 .inp{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:#fff}
 .inp:focus{outline:3px solid #dbe5ff;border-color:var(--pri)}
+a.btn{text-decoration:none}
 .btn{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:700;background:var(--pri);color:#fff;white-space:nowrap}
 .btn:hover{filter:brightness(1.08)}
 .btn.sec{background:#fff;color:var(--tx);border:1px solid var(--bd)}
@@ -343,22 +344,25 @@ const MENUS = {
   activity: {t:'Daily Activity', d:'Catatan kegiatan harian sales', i:'list'},
   formula:  {t:'Formula Harga', d:'% LME, MJP & premium tiap produk', i:'fx'},
   harga:    {t:'Update Harga Produk', d:'Isi LME, MJP, Kurs — harga terhitung otomatis', i:'dollar'},
-  hargaHist:{t:'Riwayat Harga', d:'Perubahan LME, kurs & harga produk per periode', i:'chart'}
+  hargaHist:{t:'Riwayat Harga', d:'Perubahan LME, kurs & harga produk per periode', i:'chart'},
+  comproGan:{t:'Compro GAN', d:'Company profile PT Garuda Aluminium Nusantara', i:'book'},
+  comproSwm:{t:'Compro SWM', d:'Company profile PT Sumi Win Mukti', i:'book'}
 };
 const MODULES = [
   {k:'ringkasan', t:'Ringkasan', d:'Dashboard, buku besar & laporan meeting', i:'chart', m:['dash','ledger','report']},
   {k:'penjualan', t:'Penjualan', d:'Surat tugas, prospect, quotation, PO', i:'file', m:['surat','prospect','quotation','po']},
   {k:'aktivitas', t:'Aktivitas', d:'Daily activity tim sales', i:'clock', m:['activity']},
-  {k:'harga',     t:'Harga Produk', d:'Formula harga & update harga harian', i:'tag', m:['formula','harga','hargaHist']}
+  {k:'harga',     t:'Harga Produk', d:'Formula harga & update harga harian', i:'tag', m:['formula','harga','hargaHist']},
+  {k:'profil',    t:'Company Profile', d:'Compro GAN & SWM', i:'book', m:['comproGan','comproSwm']}
 ];
 const FAV = ['dash','report','quotation','harga','activity'];
-const ORDER = ['dash','surat','prospect','quotation','po','activity','ledger','formula','harga','hargaHist','report'];
+const ORDER = ['dash','surat','prospect','quotation','po','activity','ledger','formula','harga','hargaHist','report','comproGan','comproSwm'];
 const CLR = {dash:['#2f6df5','#1a44cc'], surat:['#14b8a6','#0f766e'], prospect:['#8b5cf6','#6d28d9'], quotation:['#f59e0b','#d97706'], po:['#22c55e','#15803d'],
-  activity:['#ec4899','#be185d'], ledger:['#64748b','#334155'], formula:['#06b6d4','#0e7490'], harga:['#ef4444','#b91c1c'], hargaHist:['#f97316','#c2410c'], report:['#6366f1','#4338ca']};
+  activity:['#ec4899','#be185d'], ledger:['#64748b','#334155'], formula:['#06b6d4','#0e7490'], harga:['#ef4444','#b91c1c'], hargaHist:['#f97316','#c2410c'], report:['#6366f1','#4338ca'], comproGan:['#16a34a','#166534'], comproSwm:['#dc2626','#991b1b']};
 const micStyle = k => `background:linear-gradient(135deg,${CLR[k][0]},${CLR[k][1]});box-shadow:0 6px 14px ${CLR[k][1]}40`;
-const KAT = {dash:'LAPORAN', ledger:'LAPORAN', report:'LAPORAN', surat:'TRANSAKSI', prospect:'TRANSAKSI', quotation:'TRANSAKSI', po:'TRANSAKSI', activity:'TRANSAKSI', formula:'MASTER DATA', harga:'TRANSAKSI', hargaHist:'LAPORAN'};
+const KAT = {dash:'LAPORAN', ledger:'LAPORAN', report:'LAPORAN', surat:'TRANSAKSI', prospect:'TRANSAKSI', quotation:'TRANSAKSI', po:'TRANSAKSI', activity:'TRANSAKSI', formula:'MASTER DATA', harga:'TRANSAKSI', hargaHist:'LAPORAN', comproGan:'DOKUMEN', comproSwm:'DOKUMEN'};
 
-const S = {url:'', token:'', schema:null, data:{}, page:'home', f:{}, reg:[], stack:[], serverTime:'',
+const S = {url:'', token:'', schema:null, data:{}, compro:{}, page:'home', f:{}, reg:[], stack:[], serverTime:'',
   dash:{per:'all', from:'', to:'', pt:'', sales:''}, h:null, r:null};
 
 /* ================= UTIL ================= */
@@ -431,7 +435,7 @@ function startApp(){
 function logout(){ ls('sr_tok', null); location.reload(); }
 async function loadAll(){
   const j = await api('getAll');
-  S.schema = j.schema; S.data = j.data; S.serverTime = j.serverTime;
+  S.schema = j.schema; S.data = j.data; S.compro = j.compro || {}; S.serverTime = j.serverTime;
   Object.keys(S.schema).forEach(t => { if(!S.data[t]) S.data[t] = []; });
   const el = document.getElementById('upd'); if(el) el.textContent = 'Diperbarui ' + String(j.serverTime).slice(11,16);
 }
@@ -460,6 +464,7 @@ function go(p){
     else if(p==='report') renderReport();
     else if(p==='harga') renderHarga();
     else if(p==='hargaHist') renderHargaHist();
+    else if(p==='comproGan' || p==='comproSwm') renderCompro(p);
     else renderList(p);
   }
   renderDock(activeMod);
@@ -500,7 +505,8 @@ function closeModule(){
 function menuCard(k){
   const m = MENUS[k], n = (S.data[k]||[]).length;
   const qn = (S.data.quotation||[]).length, pn = (S.data.po||[]).length, an = (S.data.activity||[]).filter(r=>r.tanggal===today()).length;
-  const cnt = k==='dash' ? `${qn} quotation · ${pn} PO` : k==='report' ? `${an} aktivitas hari ini` : k==='ledger' ? companies().length+' perusahaan' : (k==='harga'||k==='hargaHist') ? distinct('harga','tanggal').length+' tanggal' : n+' data';
+  const cf = COMPRO_KEY[k] ? S.compro[COMPRO_KEY[k]] : null;
+  const cnt = COMPRO_KEY[k] ? (cf ? 'Diperbarui '+fmtD(cf.updated) : 'Belum ada file') : k==='dash' ? `${qn} quotation · ${pn} PO` : k==='report' ? `${an} aktivitas hari ini` : k==='ledger' ? companies().length+' perusahaan' : (k==='harga'||k==='hargaHist') ? distinct('harga','tanggal').length+' tanggal' : n+' data';
   return `<div class="mcard" onclick="go('${k}')"><div class="mic" style="${micStyle(k)}">${ic(m.i)}</div><b>${m.t}</b><em>${cnt}</em></div>`;
 }
 function homeHarga(){
@@ -1079,6 +1085,40 @@ function hargaRows(all){
       qty: has(inp.qty)?Number(inp.qty):'', cost: has(inp.cost)?Number(inp.cost):'', margin}, c);
   });
 }
+/* ================= COMPANY PROFILE ================= */
+const COMPRO_KEY = {comproGan:'gan', comproSwm:'swm'};
+const fmtSize = b => !b ? '' : b > 1048576 ? (b/1048576).toFixed(1).replace('.',',')+' MB' : Math.round(b/1024)+' KB';
+function renderCompro(p){
+  const pt = COMPRO_KEY[p], f = S.compro[pt], nm = pt==='gan' ? 'GAN' : 'SWM';
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="bar">
+      <div><b>${f ? esc(f.name) : 'Belum ada file Company Profile '+nm}</b>
+        <div class="meta">${f ? 'Diperbarui '+esc(String(f.updated).replace('T',' ').slice(0,16))+(f.size?' · '+fmtSize(f.size):'') : 'Upload file PPT / PPTX / PDF compro '+nm+'.'}</div></div>
+      <span style="flex:1"></span>
+      ${f ? `<a class="btn sec" href="https://drive.google.com/uc?export=download&id=${encodeURIComponent(f.id)}" target="_blank" rel="noopener">${ic('save')} Unduh</a>
+             <a class="btn sec" href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">${ic('file')} Buka di tab baru</a>` : ''}
+      <label class="btn" id="cpBtn">${ic('plus')} ${f ? 'Ganti file' : 'Upload file'}
+        <input type="file" accept=".ppt,.pptx,.pdf,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none" onchange="uploadCompro('${p}', this)"></label>
+    </div>
+    ${f ? (f.shared===false ? '<div class="meta" style="margin:8px 0">File tersimpan, tapi Drive tidak mengizinkan berbagi lewat link. Pratinjau hanya terbuka untuk akun Google pemilik.</div>' : '') +
+      `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview" style="width:100%;height:calc(100vh - 230px);min-height:480px;border:0;border-radius:14px;background:#fff;margin-top:12px" allow="autoplay" allowfullscreen></iframe>`
+      : `<div class="none" style="padding:60px 0;text-align:center">Klik <b>Upload file</b> untuk menambahkan Company Profile ${nm}.</div>`}`;
+}
+async function uploadCompro(p, inp){
+  const file = inp.files && inp.files[0]; if(!file) return;
+  if(file.size > 35*1048576){ toast('File terlalu besar (maks 35 MB)'); inp.value=''; return; }
+  const btn = document.getElementById('cpBtn'); btn.style.pointerEvents='none'; btn.style.opacity=.6;
+  toast('Mengupload '+file.name+'...');
+  try{
+    const data = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => no(new Error('File tidak bisa dibaca')); r.readAsDataURL(file); });
+    const j = await api('uploadCompro', {pt: COMPRO_KEY[p], name: file.name, mime: file.type || 'application/octet-stream', data});
+    S.compro = j.compro || {};
+    toast('Company profile tersimpan');
+  }catch(e){ toast('Gagal: '+e.message); }
+  if(S.page===p) renderCompro(p);
+}
+
 function renderHarga(){
   if(!S.h){ loadHarga(hargaDates()[0] || today()); }
   const H = S.h, dates = hargaDates();
