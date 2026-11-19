@@ -314,16 +314,17 @@ const MENUS = {
   po:       {t:'PO Report', d:'Purchase order yang sudah masuk', i:'check'},
   activity: {t:'Daily Activity', d:'Catatan kegiatan harian sales', i:'list'},
   formula:  {t:'Formula Harga', d:'% LME, MJP & premium tiap produk', i:'fx'},
-  harga:    {t:'Update Harga Produk', d:'Isi LME, MJP, Kurs — harga terhitung otomatis', i:'dollar'}
+  harga:    {t:'Update Harga Produk', d:'Isi LME, MJP, Kurs — harga terhitung otomatis', i:'dollar'},
+  hargaHist:{t:'Riwayat Harga', d:'Perubahan LME, kurs & harga produk per periode', i:'chart'}
 };
 const MODULES = [
   {k:'ringkasan', t:'Ringkasan', d:'Dashboard, buku besar & laporan meeting', i:'chart', m:['dash','ledger','report']},
   {k:'penjualan', t:'Penjualan', d:'Surat tugas, prospect, quotation, PO', i:'file', m:['surat','prospect','quotation','po']},
   {k:'aktivitas', t:'Aktivitas', d:'Daily activity tim sales', i:'clock', m:['activity']},
-  {k:'harga',     t:'Harga Produk', d:'Formula harga & update harga harian', i:'tag', m:['formula','harga']}
+  {k:'harga',     t:'Harga Produk', d:'Formula harga & update harga harian', i:'tag', m:['formula','harga','hargaHist']}
 ];
 const FAV = ['dash','report','quotation','harga','activity'];
-const KAT = {dash:'LAPORAN', ledger:'LAPORAN', report:'LAPORAN', surat:'TRANSAKSI', prospect:'TRANSAKSI', quotation:'TRANSAKSI', po:'TRANSAKSI', activity:'TRANSAKSI', formula:'MASTER DATA', harga:'TRANSAKSI'};
+const KAT = {dash:'LAPORAN', ledger:'LAPORAN', report:'LAPORAN', surat:'TRANSAKSI', prospect:'TRANSAKSI', quotation:'TRANSAKSI', po:'TRANSAKSI', activity:'TRANSAKSI', formula:'MASTER DATA', harga:'TRANSAKSI', hargaHist:'LAPORAN'};
 
 const S = {url:'', token:'', schema:null, data:{}, page:'home', f:{}, reg:[], stack:[], serverTime:'',
   dash:{per:'all', from:'', to:'', pt:'', sales:''}, h:null, r:null};
@@ -348,8 +349,23 @@ const normAlloy = s => String(s||'').toUpperCase().replace(/ALUMINIUM|ALUMUNIUM|
 const visited = r => r.statusKunjungan==='SUDAH DIKUNJUNGI';
 
 async function api(action, payload){
-  const res = await fetch(S.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({token:S.token, action}, payload||{}))});
-  const j = await res.json();
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 90000);
+  let res, txt;
+  try{
+    res = await fetch(S.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({token:S.token, action}, payload||{})), signal: ctl.signal});
+    txt = await res.text();
+  }catch(e){
+    if(e.name==='AbortError') throw new Error('Server tidak menjawab dalam 90 detik. Cek URL Web App dan deployment Apps Script.');
+    throw new Error('Tidak bisa terhubung ke server. Pastikan URL benar (berakhiran /exec) dan Web App di-deploy dengan akses "Anyone".');
+  }finally{ clearTimeout(tm); }
+  let j;
+  try{ j = JSON.parse(txt); }
+  catch(e){
+    if(/accounts\.google|signin|ServiceLogin/i.test(txt)) throw new Error('Web App minta login Google. Deploy ulang dengan "Who has access: Anyone".');
+    if(/authoriz|izin|permission/i.test(txt)) throw new Error('Script belum diberi izin. Buka Apps Script, jalankan migrasiDataLama sekali lalu klik Allow.');
+    const m = txt.match(/<title>([^<]*)<\/title>/i);
+    throw new Error('Jawaban server bukan data: ' + (m ? m[1] : txt.slice(0,120)));
+  }
   if(!j.ok) throw new Error(j.error || 'Gagal');
   return j;
 }
@@ -362,11 +378,13 @@ async function doLogin(){
   if(!url || !tok){ err.textContent = 'URL dan token wajib diisi'; return; }
   S.url = url; S.token = tok;
   btn.disabled = true; btn.textContent = 'Memuat...';
+  const t0 = Date.now(), tick = setInterval(() => { btn.textContent = 'Memuat... ' + Math.round((Date.now()-t0)/1000) + ' dtk'; }, 1000);
   try{
     await loadAll();
     ls('sr_url', url); ls('sr_tok', tok);
     startApp();
   }catch(e){ err.textContent = e.message; }
+  clearInterval(tick);
   btn.disabled = false; btn.textContent = 'Masuk';
 }
 function startApp(){
@@ -407,6 +425,7 @@ function go(p){
     else if(p==='ledger') renderLedgerList();
     else if(p==='report') renderReport();
     else if(p==='harga') renderHarga();
+    else if(p==='hargaHist') renderHargaHist();
     else renderList(p);
   }
   renderDock(activeMod);
@@ -446,7 +465,7 @@ function closeModule(){
 }
 function menuCard(k){
   const m = MENUS[k], n = (S.data[k]||[]).length;
-  const cnt = k==='dash'||k==='report' ? 'Buka' : k==='ledger' ? companies().length+' perusahaan' : k==='harga' ? distinct('harga','tanggal').length+' tanggal' : n+' data';
+  const cnt = k==='dash'||k==='report' ? 'Buka' : k==='ledger' ? companies().length+' perusahaan' : (k==='harga'||k==='hargaHist') ? distinct('harga','tanggal').length+' tanggal' : n+' data';
   return `<div class="mcard" onclick="go('${k}')"><div class="mic">${ic(m.i)}</div><b>${m.t}</b><p>${m.d}</p><em>${cnt}</em></div>`;
 }
 function homeHarga(){
@@ -739,7 +758,7 @@ function ledgerRows(){
 
 /* ================= DAFTAR DATA PER MENU ================= */
 function fl(t){
-  if(!S.f[t]) S.f[t] = {q:'', sales:'', pt:'', sk:'', pri:'', kel:''};
+  if(!S.f[t]) S.f[t] = {q:'', sales:'', pt:'', sk:'', pri:'', kel:'', cust:'', per:'all', from:'', to:''};
   return S.f[t];
 }
 const EXTRA = { formula: [{key:'_rumus', label:'Rumus', after:'basis', fn: r => rumus(r)}] };
@@ -755,6 +774,8 @@ function renderList(t){
       <input class="inp grow" placeholder="Cari..." value="${esc(F.q)}" oninput="fl('${t}').q=this.value;rows('${t}')">
       ${field(t,'sales')?`<select class="inp" onchange="fl('${t}').sales=this.value;rows('${t}')"><option value="">Semua Sales</option>${salesList().map(s=>`<option ${F.sales===s?'selected':''}>${esc(s)}</option>`).join('')}</select>`:''}
       ${field(t,'pt')?`<select class="inp" onchange="fl('${t}').pt=this.value;rows('${t}')"><option value="">Semua PT</option>${['GAN','SWM'].map(p=>`<option ${F.pt===p?'selected':''}>${p}</option>`).join('')}</select>`:''}
+      ${PER_T.includes(t)?perSelect(t):''}
+      ${field(t,'customer')?`<select class="inp" onchange="fl('${t}').cust=this.value;rows('${t}')"><option value="">Existing &amp; New</option>${['Existing','New'].map(o=>`<option ${F.cust===o?'selected':''}>${o}</option>`).join('')}</select>`:''}
       ${t==='formula'?`<select class="inp" onchange="fl('formula').kel=this.value;rows('formula')"><option value="">Semua Kelompok</option>${distinct('formula','kelompok').map(k=>`<option ${F.kel===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`:''}
       ${t==='surat'?`<select class="inp" onchange="fl('surat').sk=this.value;rows('surat')"><option value="">Semua Status Kunjungan</option>${field('surat','statusKunjungan').opts.map(o=>`<option ${F.sk===o?'selected':''}>${o}</option>`).join('')}</select>
         <select class="inp" onchange="fl('surat').pri=this.value;rows('surat')"><option value="">Semua</option><option value="Ya" ${F.pri==='Ya'?'selected':''}>Prioritas saja</option></select>`:''}
@@ -765,9 +786,22 @@ function renderList(t){
       <tbody id="tb"></tbody></table></div><div class="sum" id="sum"></div></div>`;
   rows(t);
 }
+const PER_T = ['prospect','quotation','po','activity'];
+const PER_OPT = [['all','Semua waktu'],['today','Hari ini'],['7d','7 hari terakhir'],['month','Bulan ini'],['lastmonth','Bulan lalu'],['year','Tahun ini'],['custom','Pilih tanggal…']];
+function perSelect(t, cb){
+  const F = fl(t), fn = cb || `rows('${t}')`;
+  return `<select class="inp" onchange="fl('${t}').per=this.value;${t==='hargaHist'?'':'renderList(\''+t+'\')'};${fn}">${PER_OPT.map(o=>`<option value="${o[0]}" ${F.per===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`+
+    (F.per==='custom' ? `<input type="date" class="inp" value="${F.from}" onchange="fl('${t}').from=this.value;${fn}"><span class="meta">s/d</span><input type="date" class="inp" value="${F.to}" onchange="fl('${t}').to=this.value;${fn}">` : '');
+}
+function inPer(F, tg){
+  const rg = periodRange(F.per, F.from, F.to);
+  return !rg || (/^\d{4}-\d{2}-\d{2}/.test(tg||'') && tg>=rg[0] && tg<=rg[1]);
+}
 function filtered(t){
   const F = fl(t), q = F.q.toLowerCase().trim();
   return (S.data[t]||[]).filter(r => {
+    if(PER_T.includes(t) && !inPer(F, r.tanggal)) return false;
+    if(F.cust && r.customer!==F.cust) return false;
     if(F.sales && String(r.sales||'').trim()!==F.sales) return false;
     if(F.pt && r.pt!==F.pt) return false;
     if(F.kel && r.kelompok!==F.kel) return false;
@@ -789,6 +823,7 @@ function cell(t, c, r){
   if(c.type==='check') return `<td>${v==='Ya'?'<span class="badge b-ok">✓</span>':''}</td>`;
   if(c.key==='statusKunjungan') return `<td>${v==='SUDAH DIKUNJUNGI'?'<span class="badge b-ok">SUDAH DIKUNJUNGI</span>':'<span class="badge b-mut">'+esc(v||'BELUM DITANDAI')+'</span>'}</td>`;
   if(c.key==='prioritas') return `<td>${v==='Ya'?'<span class="badge b-pr">PRIORITAS</span>':''}</td>`;
+  if(c.key==='customer') return `<td>${v?`<span class="badge ${v==='New'?'b-pr':'b-ok'}">${esc(v)}</span>`:''}</td>`;
   if(c.key==='basis') return `<td><span class="badge ${v==='Harga Pasar'?'b-pr':'b-bl'}">${esc(v||'LME')}</span></td>`;
   if(c.type==='textarea') return `<td class="wrap">${esc(v).replace(/\n/g,'<br>')}</td>`;
   return `<td>${esc(v)}</td>`;
@@ -802,6 +837,8 @@ function rows(t){
   if(field(t,'qty')) s += `<span>Total Qty: <b>${fmtKg(sumBy(list,'qty'))}</b></span>`;
   if(field(t,'totalRp')) s += `<span>Total Nilai: <b>${fmtRp(sumBy(list,'totalRp'))}</b></span>`;
   if(t==='surat') s += `<span>Sudah dikunjungi: <b>${fmtN(list.filter(visited).length)}</b></span>`;
+  if(field(t,'customer')) s += `<span>Existing: <b>${list.filter(r=>r.customer==='Existing').length}</b></span><span>New: <b>${list.filter(r=>r.customer==='New').length}</b></span>`;
+  if(PER_T.includes(t) && fl(t).per!=='all'){ const nd = (S.data[t]||[]).filter(r=>!/^\d{4}-\d{2}-\d{2}/.test(r.tanggal||'')).length; if(nd) s += `<span>${nd} data tanpa tanggal tidak ikut periode</span>`; }
   document.getElementById('sum').innerHTML = s;
 }
 function refreshView(){
@@ -976,6 +1013,41 @@ function exportHarga(kind){
     ${priceSection(H.tanggal, H.lme, H.mjp, H.kurs, rows)}
     <div class="rf"><span>Harga $/MT = LME × %LME + MJP + Premium · Rp/kg = $/MT × Kurs ÷ 1000</span><span>Dibuat ${tglPanjang(today())}</span></div></div>`;
   exportHtml(html, 'Daftar-Harga-'+H.tanggal, kind);
+}
+
+/* ================= RIWAYAT HARGA ================= */
+function renderHargaHist(){
+  const F = fl('hargaHist');
+  const prods = [...new Set((S.data.harga||[]).map(r => r.produk + (r.remarks?' · '+r.remarks:'')))].sort();
+  document.getElementById('content').innerHTML = `
+    <div class="bar">
+      ${perSelect('hargaHist', 'renderHargaHist()')}
+      <select class="inp" onchange="fl('hargaHist').prod=this.value;renderHargaHist()"><option value="">Semua Produk</option>${prods.map(p=>`<option ${F.prod===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+      <select class="inp" onchange="fl('hargaHist').kel=this.value;renderHargaHist()"><option value="">Semua Kelompok</option>${distinct('harga','kelompok').map(k=>`<option ${F.kel===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
+    </div>
+    <div id="hh"></div>`;
+  hargaHistBody();
+}
+function hargaHistBody(){
+  const F = fl('hargaHist');
+  const all = (S.data.harga||[]).filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.tanggal||''));
+  const dates = [...new Set(all.map(r=>r.tanggal))].sort();
+  const shown = dates.filter(d => inPer(F, d));
+  const base = d => all.find(r=>r.tanggal===d) || {};
+  const prevDate = d => dates[dates.indexOf(d)-1];
+  const delta = (cur, prev, dec) => { if(!has(cur)||!has(prev)) return ''; const x = Number(cur)-Number(prev); if(!x) return '<span class="meta">0</span>'; return `<b style="color:${x>0?'var(--ok)':'var(--bad)'}">${x>0?'▲':'▼'} ${fmtN(Math.abs(x),dec)}</b>`; };
+  const key = r => (r.formulaId || r.produk+'|'+r.remarks);
+  const rows = all.filter(r => shown.includes(r.tanggal) && (!F.kel || r.kelompok===F.kel) && (!F.prod || (r.produk+(r.remarks?' · '+r.remarks:''))===F.prod))
+    .sort((a,b)=> b.tanggal.localeCompare(a.tanggal) || String(a.produk).localeCompare(String(b.produk)));
+  document.getElementById('hh').innerHTML = `
+    <div class="panel"><div class="ph"><b>Data Pasar per Tanggal</b><small>${shown.length} tanggal · perubahan dibanding tanggal sebelumnya</small></div><div class="tw"><table>
+      <thead><tr><th>Tanggal</th><th class="n">LME Spot ($/MT)</th><th class="n">Perubahan</th><th class="n">MJP ($/MT)</th><th class="n">Perubahan</th><th class="n">Kurs</th><th class="n">Perubahan</th><th class="n">Produk</th></tr></thead>
+      <tbody>${[...shown].reverse().map(d=>{const b=base(d), p=prevDate(d), pb=p?base(p):{};return `<tr class="ck" onclick="loadHarga('${d}');go('harga')"><td><b>${fmtD(d)}</b></td><td class="n">${fmtN(b.lme,2)}</td><td class="n">${p?delta(b.lme,pb.lme,2):''}</td><td class="n">${fmtN(b.mjp,2)}</td><td class="n">${p?delta(b.mjp,pb.mjp,2):''}</td><td class="n">${fmtN(b.kurs)}</td><td class="n">${p?delta(b.kurs,pb.kurs):''}</td><td class="n">${all.filter(r=>r.tanggal===d).length}</td></tr>`;}).join('')||'<tr><td colspan="8" class="empty">Belum ada harga tersimpan di periode ini</td></tr>'}</tbody></table></div></div>
+    <div class="panel"><div class="ph"><b>Harga Produk</b><small>${rows.length} baris</small></div><div class="tw lim"><table>
+      <thead><tr><th>Tanggal</th><th>Produk</th><th>Remarks</th><th>PT</th><th>Rumus</th><th class="n">Harga $/MT</th><th class="n">Harga Rp/kg</th><th class="n">Perubahan Rp/kg</th><th class="n">Cost</th><th class="n">Margin</th></tr></thead>
+      <tbody>${rows.map(r=>{const p=prevDate(r.tanggal), pr=p?all.find(x=>x.tanggal===p&&key(x)===key(r)):null;
+        return `<tr><td>${fmtD(r.tanggal)}</td><td><b>${esc(r.produk)}</b></td><td>${esc(r.remarks)}</td><td>${esc(r.pt)}</td><td>${esc(r.rumus)}</td><td class="n">${rangeTxt(r.hargaUsdMin,r.hargaUsdMax,2)}</td><td class="n"><b>${rangeTxt(r.hargaRpMin,r.hargaRpMax)}</b></td><td class="n">${pr?delta(r.hargaRpMin,pr.hargaRpMin):''}</td><td class="n">${fmtN(r.cost)}</td><td class="n">${marginTxt(r.margin)}</td></tr>`;}).join('')||'<tr><td colspan="10" class="empty">Tidak ada data</td></tr>'}</tbody></table></div>
+      <div class="sum"><span>Klik baris tanggal di atas untuk membuka atau mengubah harga tanggal itu.</span></div></div>`;
 }
 
 /* ================= LAPORAN DAILY MEETING ================= */
