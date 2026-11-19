@@ -1103,11 +1103,11 @@ const COMPRO_KEY = {comproGan:'gan', comproSwm:'swm'};
 const fmtSize = b => !b ? '' : b > 1048576 ? (b/1048576).toFixed(1).replace('.',',')+' MB' : Math.round(b/1024)+' KB';
 /* File compro diletakkan langsung di repo GitHub, sejajar dengan index.html:
    compro-gan.pptx / compro-gan.pdf  dan  compro-swm.pptx / compro-swm.pdf  (PDF dipakai bila ada) */
-const COMPRO_FILE = {gan:'compro-gan', swm:'compro-swm'};
+const COMPRO_FILE = {gan:['compro-gan','Company_Profile_GAN_2026','COMPRO_GAN_2026','Company_Profile_GAN'], swm:['compro-swm','SWM_Company_Profile','Company_Profile_SWM','COMPRO_SWM']};
 async function findCompro(pt){
   if(S.compro[pt] !== undefined) return S.compro[pt];
-  for(const ext of ['pdf','pptx','ppt']){
-    const url = new URL(COMPRO_FILE[pt]+'.'+ext, location.href).href;
+  for(const ext of ['pdf','pptx','ppt']) for(const nm of COMPRO_FILE[pt]){
+    const url = new URL(nm+'.'+ext, location.href).href;
     try{ const r = await fetch(url, {method:'HEAD', cache:'no-store'}); if(r.ok){ return S.compro[pt] = {url, ext, size:+r.headers.get('content-length')||0}; } }catch(e){}
   }
   return S.compro[pt] = null;
@@ -1119,7 +1119,7 @@ async function renderCompro(p){
   const f = await findCompro(pt);
   if(S.page !== p) return;
   if(!f){
-    c.innerHTML = `<div class="none" style="padding:60px 0;text-align:center">File Company Profile ${nm} belum ada.<br><span class="meta">Upload <b>${COMPRO_FILE[pt]}.pptx</b> atau <b>${COMPRO_FILE[pt]}.pdf</b> ke repo GitHub, di folder yang sama dengan index.html.</span></div>`;
+    c.innerHTML = `<div class="none" style="padding:60px 0;text-align:center">File Company Profile ${nm} belum ada.<br><span class="meta">Upload <b>${COMPRO_FILE[pt][0]}.pdf</b> / <b>.pptx</b> (atau <b>${COMPRO_FILE[pt][1]}.pptx</b>) ke repo GitHub, di folder yang sama dengan index.html.</span></div>`;
     return;
   }
   const local = /^(file:|http:\/\/localhost|http:\/\/127\.)/.test(location.href);
