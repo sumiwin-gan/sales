@@ -787,13 +787,14 @@ function renderList(t){
   rows(t);
 }
 const PER_T = ['prospect','quotation','po','activity'];
-const PER_OPT = [['all','Semua waktu'],['today','Hari ini'],['7d','7 hari terakhir'],['month','Bulan ini'],['lastmonth','Bulan lalu'],['year','Tahun ini'],['custom','Pilih tanggal…']];
+const PER_OPT = [['all','Semua waktu'],['today','Hari ini'],['7d','7 hari terakhir'],['month','Bulan ini'],['lastmonth','Bulan lalu'],['year','Tahun ini'],['custom','Pilih tanggal…'],['nodate','Tanpa tanggal']];
 function perSelect(t, cb){
   const F = fl(t), fn = cb || `rows('${t}')`;
   return `<select class="inp" onchange="fl('${t}').per=this.value;${t==='hargaHist'?'':'renderList(\''+t+'\')'};${fn}">${PER_OPT.map(o=>`<option value="${o[0]}" ${F.per===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`+
     (F.per==='custom' ? `<input type="date" class="inp" value="${F.from}" onchange="fl('${t}').from=this.value;${fn}"><span class="meta">s/d</span><input type="date" class="inp" value="${F.to}" onchange="fl('${t}').to=this.value;${fn}">` : '');
 }
 function inPer(F, tg){
+  if(F.per==='nodate') return !/^\d{4}-\d{2}-\d{2}/.test(tg||'');
   const rg = periodRange(F.per, F.from, F.to);
   return !rg || (/^\d{4}-\d{2}-\d{2}/.test(tg||'') && tg>=rg[0] && tg<=rg[1]);
 }
@@ -819,7 +820,7 @@ function cell(t, c, r){
     const d = ['hargaUsd','totalUsd','lmeMin','lmeMax','premium'].includes(c.key) ? 4 : 0;
     return `<td class="n">${fmtN(v,d)}</td>`;
   }
-  if(c.type==='date') return `<td>${esc(fmtD(v))}</td>`;
+  if(c.type==='date') return `<td>${v ? esc(fmtD(v)) : (PER_T.includes(t) ? '<span class="badge b-pr">Belum diisi</span>' : '')}</td>`;
   if(c.type==='check') return `<td>${v==='Ya'?'<span class="badge b-ok">✓</span>':''}</td>`;
   if(c.key==='statusKunjungan') return `<td>${v==='SUDAH DIKUNJUNGI'?'<span class="badge b-ok">SUDAH DIKUNJUNGI</span>':'<span class="badge b-mut">'+esc(v||'BELUM DITANDAI')+'</span>'}</td>`;
   if(c.key==='prioritas') return `<td>${v==='Ya'?'<span class="badge b-pr">PRIORITAS</span>':''}</td>`;
@@ -862,7 +863,7 @@ function openForm(t, id){
     else if(fd.type==='select') h = `<select class="inp" ${nm} onchange="calc('${t}')">${fd.opts.map(o=>`<option value="${esc(o)}" ${String(v)===o?'selected':''}>${o||'–'}</option>`).join('')}${v && !fd.opts.includes(String(v))?`<option selected>${esc(v)}</option>`:''}</select>`;
     else if(fd.type==='check') h = `<div class="chk"><input type="checkbox" ${nm} ${v==='Ya'?'checked':''}> <span>Sudah</span></div>`;
     else if(fd.type==='num') h = `<input class="inp" type="number" step="any" ${nm} value="${esc(v)}" oninput="calc('${t}')">`;
-    else if(fd.type==='date') h = `<input class="inp" type="date" ${nm} value="${/^\d{4}-\d{2}-\d{2}$/.test(v)?v:''}">${v && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? `<div class="meta">Data lama: ${esc(v)}</div>`:''}`;
+    else if(fd.type==='date') h = `<input class="inp" type="date" ${nm} value="${/^\d{4}-\d{2}-\d{2}$/.test(v)?v:''}" ${PER_T.includes(t)?'required':''}>${v && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? `<div class="meta">Data lama: ${esc(v)}</div>`:''}${r && !v && PER_T.includes(t) ? `<div class="meta" style="color:var(--warn);font-weight:700">Tanggal belum diisi — isi tanggal sebenarnya supaya masuk filter periode</div>`:''}`;
     else if(fd.type==='sales') h = `<input class="inp" ${nm} list="dl_sales" value="${esc(v)}">`;
     else if(fd.key==='alloy') h = `<input class="inp" ${nm} list="dl_alloy" value="${esc(v)}">`;
     else if(fd.key==='kelompok') h = `<input class="inp" ${nm} list="dl_kel" value="${esc(v)}">`;
@@ -905,6 +906,7 @@ async function saveRow(t, id){
   const row = Object.assign({id}, formVals(t));
   const req = {formula:'type', activity:'aktivitas'}[t] || 'perusahaan';
   if(!row[req]){ toast(field(t,req).label + ' wajib diisi'); return; }
+  if(PER_T.includes(t) && !/^\d{4}-\d{2}-\d{2}$/.test(row.tanggal||'')){ toast('Tanggal wajib diisi'); const el = document.querySelector('#frm [name=tanggal]'); if(el){ el.focus(); el.style.borderColor = 'var(--bad)'; } return; }
   const btn = document.getElementById('svBtn'); btn.disabled = true; btn.textContent = 'Menyimpan...';
   try{
     const j = await api('save', {table:t, row});
