@@ -133,6 +133,8 @@ body.side .dock{display:none}
 @media (max-width:900px){.todo{grid-template-columns:1fr}.hgrid.one{grid-template-columns:repeat(2,minmax(0,1fr))}.gs{display:none}}
 /* popup modul */
 #mpop .mbg{z-index:25;align-items:center;background:rgba(11,22,48,.35)}
+.upb{background:#fff;border-radius:18px;width:min(420px,100%);padding:22px;box-shadow:0 30px 80px rgba(13,33,96,.3);white-space:pre-line}
+.upt{height:10px;border-radius:6px;background:#e8edf7;overflow:hidden}.upt div{height:100%;border-radius:6px;transition:width .4s}
 .mpop{background:#fff;border-radius:18px;width:min(380px,100%);padding:18px;box-shadow:0 30px 80px rgba(13,33,96,.3)}
 .mpop .mph{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--bd);margin-bottom:14px}
 .mpop .mph b{font-size:19px;font-weight:800;flex:1;white-space:nowrap}
@@ -1118,18 +1120,55 @@ function renderCompro(p){
       `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview" style="width:100%;height:calc(100vh - 230px);min-height:480px;border:0;border-radius:14px;background:#fff;margin-top:12px" allow="autoplay" allowfullscreen></iframe>`
       : `<div class="none" style="padding:60px 0;text-align:center">Klik <b>Upload file</b> untuk menambahkan Company Profile ${nm}.</div>`}`;
 }
-async function uploadCompro(p, inp){
-  const file = inp.files && inp.files[0]; if(!file) return;
-  if(file.size > 35*1048576){ toast('File terlalu besar (maks 35 MB)'); inp.value=''; return; }
-  const btn = document.getElementById('cpBtn'); btn.style.pointerEvents='none'; btn.style.opacity=.6;
-  toast('Mengupload '+file.name+'...');
-  try{
-    const data = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => no(new Error('File tidak bisa dibaca')); r.readAsDataURL(file); });
-    const j = await api('uploadCompro', {pt: COMPRO_KEY[p], name: file.name, mime: file.type || 'application/octet-stream', data});
-    S.compro = j.compro || {};
-    toast('Company profile tersimpan');
-  }catch(e){ toast('Gagal: '+e.message); }
-  if(S.page===p) renderCompro(p);
+function upBox(st){
+  let el = document.getElementById('upbox');
+  if(!el){ el = document.createElement('div'); el.id = 'upbox'; document.body.appendChild(el); }
+  if(!st){ el.innerHTML = ''; return; }
+  const col = st.state==='ok' ? '#16a34a' : st.state==='err' ? '#dc2626' : 'var(--pri)';
+  el.innerHTML = `<div class="mbg" style="z-index:60;align-items:center"><div class="upb">
+    <b>${st.state==='ok' ? 'Upload selesai' : st.state==='err' ? 'Upload gagal' : 'Mengupload Company Profile...'}</b>
+    <div class="meta" style="margin:4px 0 14px;word-break:break-all">${esc(st.name)}</div>
+    <div class="upt"><div style="width:${st.pct}%;background:${col}"></div></div>
+    <div style="margin-top:10px;font-size:13px;color:${st.state==='err'?'#dc2626':'var(--ink)'}">${esc(st.msg)}</div>
+    ${st.state==='run' ? '<div class="meta" style="margin-top:6px">Jangan tutup halaman ini sampai selesai.</div>' : `<button class="btn" style="margin-top:16px;width:100%;justify-content:center" onclick="upBox(null)">Tutup</button>`}
+  </div></div>`;
+}
+function uploadCompro(p, inp){
+  const file = inp.files && inp.files[0]; inp.value = ''; if(!file) return;
+  const st = {name:file.name, pct:0, state:'run', msg:'Membaca file...'};
+  if(file.size > 35*1048576){ upBox(Object.assign(st, {state:'err', msg:'File terlalu besar ('+fmtSize(file.size)+'). Maksimal 35 MB.'})); return; }
+  upBox(st);
+  const fail = m => upBox(Object.assign(st, {state:'err', msg:m}));
+  const r = new FileReader();
+  r.onprogress = e => { if(e.lengthComputable){ st.pct = Math.round(e.loaded/e.total*10); upBox(st); } };
+  r.onerror = () => fail('File tidak bisa dibaca dari komputer.');
+  r.onload = () => {
+    const body = JSON.stringify({token:S.token, action:'uploadCompro', pt:COMPRO_KEY[p], name:file.name, mime:file.type||'application/octet-stream', data:String(r.result).split(',')[1]});
+    const x = new XMLHttpRequest();
+    x.open('POST', S.url); x.setRequestHeader('Content-Type','text/plain;charset=utf-8'); x.timeout = 300000;
+    st.msg = 'Mengirim file ke server...'; upBox(st);
+    let tick = null;
+    x.upload.onprogress = e => { if(e.lengthComputable){ st.pct = 10 + Math.round(e.loaded/e.total*70); st.msg = 'Mengirim file ke server... '+Math.round(e.loaded/e.total*100)+'%'; upBox(st); } };
+    x.upload.onload = () => { st.pct = 82; st.msg = 'Menyimpan ke Google Drive... (bisa 10–60 detik)'; upBox(st);
+      tick = setInterval(() => { if(st.pct < 97){ st.pct++; upBox(st); } }, 1500); };
+    x.ontimeout = () => { clearInterval(tick); fail('Server tidak menjawab dalam 5 menit. Coba lagi atau pakai file yang lebih kecil.'); };
+    x.onerror = () => { clearInterval(tick); fail('Koneksi ke server terputus. Cek internet lalu coba lagi.'); };
+    x.onload = () => {
+      clearInterval(tick);
+      let j; try{ j = JSON.parse(x.responseText); }catch(e){ return fail('Jawaban server bukan data. Pastikan Code.gs terbaru sudah di-deploy (New version).'); }
+      if(!j.ok){
+        let m = j.error || 'Gagal';
+        if(/permission|izin|authoriz/i.test(m)) m += '\n\nJalankan fungsi tesDrive di Apps Script → Allow, lalu Deploy → Manage deployments → New version.';
+        if(/Aksi tidak dikenal/.test(m)) m = 'Server masih memakai Code.gs lama. Ganti Code.gs lalu Deploy → New version.';
+        return fail(m);
+      }
+      S.compro = j.compro || {};
+      upBox(Object.assign(st, {state:'ok', pct:100, msg:'Company profile tersimpan di Google Drive dan sudah bisa dilihat.'}));
+      if(S.page===p) renderCompro(p);
+    };
+    x.send(body);
+  };
+  r.readAsDataURL(file);
 }
 
 function renderHarga(){
