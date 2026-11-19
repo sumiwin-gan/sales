@@ -539,6 +539,53 @@ function hitung(fm, lme, mjp, kurs){
 }
 const rangeTxt = (a, b, d) => !has(a) ? '' : (has(b) && Number(b)!==Number(a) ? fmtN(a,d)+' – '+fmtN(b,d) : fmtN(a,d));
 
+/* ================= KURS OTOMATIS ================= */
+const KURS_NAMA = {USD:'Dolar AS', EUR:'Euro', CNY:'Yuan China', SGD:'Dolar Singapura', MYR:'Ringgit Malaysia', JPY:'Yen Jepang', HKD:'Dolar Hong Kong', AUD:'Dolar Australia', GBP:'Pound Inggris', KRW:'Won Korea', THB:'Baht Thailand'};
+async function loadKurs(force){
+  if(S.kurs && !force) return S.kurs;
+  if(S.kursP && !force) return S.kursP;
+  S.kursP = api('kurs', {force: !!force}).then(j => { S.kurs = j.kurs; S.kursErr = ''; return S.kurs; })
+    .catch(e => { S.kursErr = e.message; return null; }).finally(() => { S.kursP = null; });
+  return S.kursP;
+}
+const kursFmt = (k, v) => fmtN(v, v < 100 ? 2 : 0);
+function kursPanel(){
+  const K = S.kurs;
+  if(!K) return `<div class="hp" style="margin:0 0 16px"><div class="hph"><b>Kurs ke Rupiah</b><span class="meta">${S.kursErr ? 'Gagal memuat: '+esc(S.kursErr) : 'Memuat kurs...'}</span><span style="flex:1"></span><span class="lk" onclick="refreshKurs()">⟳ Coba lagi</span></div></div>`;
+  return `<div class="hp" style="margin:0 0 16px"><div class="hph"><b>Kurs ke Rupiah${S.lme?' & LME':''}</b><span class="meta">Update ${esc(String(K.updated||'').replace(/ \+0000$/,' UTC'))}</span><span style="flex:1"></span>
+      <span class="meta">Sumber: <a class="lk" href="${esc(K.sourceUrl)}" target="_blank" rel="noopener">${esc(K.source)}</a></span><span class="lk" onclick="refreshKurs()">⟳ Perbarui</span></div>
+    <div class="hgrid">${S.lme?`<div class="hcell" style="border-color:#bfd0ff;background:var(--soft)"><b>LME Aluminium</b><small>${esc(S.lme.source)}${S.lme.date?' · '+fmtD(S.lme.date):''}</small><div class="rp">$${fmtN(S.lme.usdPerTon,2)}</div><div class="us">per MT · ≈ Rp ${fmtN(S.lme.usdPerTon*K.toIdr.USD/1000)}/kg</div></div>`:''}${Object.keys(K.toIdr).map(k=>`<div class="hcell"><b>${k}</b><small>${KURS_NAMA[k]||''}</small><div class="rp">Rp ${kursFmt(k, K.toIdr[k])}</div><div class="us">per 1 ${k}</div></div>`).join('')}</div>
+    <div class="meta" style="margin-top:8px">Kurs tengah pasar, bisa sedikit berbeda dari kurs bank atau JISDOR BI.</div></div>`;
+}
+async function refreshKurs(){ S.kurs = null; S.kursErr = ''; paintKurs(); await Promise.all([loadKurs(true), loadLme(true)]); paintKurs(); }
+function paintKurs(){ const el = document.getElementById('kursBox'); if(el) el.innerHTML = kursPanel(); }
+async function loadLme(force){
+  if(S.lme && !force) return S.lme;
+  try{ const j = await api('lme', {force: !!force}); S.lme = j.lme; S.lmeErr = ''; }
+  catch(e){ S.lme = null; S.lmeErr = e.message; }
+  return S.lme;
+}
+async function autoLme(force){
+  const btn = document.getElementById('lBtn2'); if(btn){ btn.textContent = 'Mengambil...'; }
+  const L = await loadLme(!!force);
+  if(btn){ btn.textContent = 'LME otomatis'; }
+  if(!L){ if(force) toast('LME otomatis: ' + S.lmeErr); return; }
+  S.h.lme = L.usdPerTon; S.h.lmeAuto = true;
+  const el = document.getElementById('lInp'); if(el) el.value = S.h.lme;
+  const nt = document.getElementById('lNote'); if(nt) nt.textContent = 'Otomatis dari ' + L.source + (L.date ? ' · ' + fmtD(L.date) : '');
+  hargaBody(); if(force) toast('LME: $' + fmtN(L.usdPerTon, 2) + '/MT');
+}
+async function autoKurs(force){
+  const btn = document.getElementById('kBtn'); if(btn){ btn.disabled = true; btn.textContent = 'Mengambil...'; }
+  const K = await loadKurs(!!force);
+  if(btn){ btn.disabled = false; btn.textContent = 'Kurs otomatis'; }
+  if(!K){ toast('Gagal ambil kurs: ' + S.kursErr); return; }
+  S.h.kurs = Math.round(K.toIdr.USD); S.h.kursAuto = true;
+  const el = document.getElementById('kInp'); if(el) el.value = S.h.kurs;
+  const nt = document.getElementById('kNote'); if(nt) nt.textContent = 'Otomatis dari ' + K.source + ' · ' + String(K.updated||'').slice(0,16);
+  hargaBody(); toast('Kurs USD: Rp ' + fmtN(S.h.kurs));
+}
+
 /* ================= DASHBOARD ================= */
 function periodRange(per, from, to){
   const d = new Date(), t = ymd(d);
@@ -615,6 +662,8 @@ function renderDash(){
   const lastAc = [...ac].sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))).slice(0,8);
 
   const tag = (D.sales?' · '+D.sales:'') + (D.pt?' · '+D.pt:'');
+  if(!S.kurs && !S.kursErr) loadKurs().then(paintKurs);
+  if(!S.lme && S.lmeErr===undefined) loadLme().then(paintKurs);
   document.getElementById('content').innerHTML = `
     <div class="bar">
       <select class="inp" onchange="S.dash.per=this.value;renderDash()">
@@ -626,6 +675,7 @@ function renderDash(){
       <span style="flex:1"></span>
       <button class="btn sec" onclick="go('report')">${ic('printer')} Laporan Meeting</button>
     </div>
+    <div id="kursBox">${kursPanel()}</div>
     ${undated?`<div class="note">Periode: ${perLbl}. ${undated} data tanpa tanggal tidak dihitung di periode ini (pilih "Semua waktu" untuk melihatnya). Surat Tugas tidak bertanggal, jadi selalu ditampilkan semua.</div>`:''}
     <div class="kpis">
       ${kpi('mail','c1','Surat Tugas', fmtN(su.length), `${fmtN(prio.length)} prioritas`, reg('Surat Tugas'+tag,'surat',su))}
@@ -956,6 +1006,7 @@ function hargaRows(all){
 function renderHarga(){
   if(!S.h){ loadHarga(hargaDates()[0] || today()); }
   const H = S.h, dates = hargaDates();
+  if(!H.saved && H.tanggal===today() && !H.kursAuto && !H.kursTried){ H.kursTried = true; setTimeout(() => { autoKurs(); autoLme(); }, 0); }
   document.getElementById('content').innerHTML = `
     <div class="bar">
       <input type="date" class="inp" value="${H.tanggal}" onchange="loadHarga(this.value);renderHarga()">
@@ -970,9 +1021,9 @@ function renderHarga(){
     <div class="note">${H.saved?`Harga tanggal ${fmtD(H.tanggal)} sudah tersimpan. Ubah angka lalu Simpan untuk memperbarui.`:`Harga tanggal ${fmtD(H.tanggal)} <b>belum disimpan</b>${H.lme?' — LME, MJP, Kurs diisi dari tanggal sebelumnya':''}. Isi lalu klik Simpan Harga.`}</div>
     <div class="panel"><div class="ph"><b>Data Pasar ${tglPanjang(H.tanggal)}</b><small>Harga $/MT = LME × %LME + MJP (jika dipakai) + Premium · Rp/kg = $/MT × Kurs ÷ 1000</small></div>
       <div class="hin">
-        <div><label>LME Spot ($/MT)</label><input class="inp" type="number" step="any" value="${esc(H.lme)}" oninput="S.h.lme=this.value;hargaBody()"></div>
+        <div><label style="display:flex;justify-content:space-between">LME Spot ($/MT) <span class="lk" id="lBtn2" onclick="autoLme(true)">LME otomatis</span></label><input class="inp" id="lInp" type="number" step="any" value="${esc(H.lme)}" oninput="S.h.lme=this.value;S.h.lmeAuto=false;document.getElementById('lNote').textContent='';hargaBody()"><div class="meta" id="lNote" style="margin-top:4px">${H.lmeAuto&&S.lme?'Otomatis dari '+esc(S.lme.source):''}</div></div>
         <div><label>MJP ($/MT)</label><input class="inp" type="number" step="any" value="${esc(H.mjp)}" oninput="S.h.mjp=this.value;hargaBody()"></div>
-        <div><label>Kurs $ → Rp</label><input class="inp" type="number" step="any" value="${esc(H.kurs)}" oninput="S.h.kurs=this.value;hargaBody()"></div>
+        <div><label style="display:flex;justify-content:space-between">Kurs $ → Rp <span class="lk" id="kBtn" onclick="autoKurs(true)">Kurs otomatis</span></label><input class="inp" id="kInp" type="number" step="any" value="${esc(H.kurs)}" oninput="S.h.kurs=this.value;S.h.kursAuto=false;document.getElementById('kNote').textContent='';hargaBody()"><div class="meta" id="kNote" style="margin-top:4px">${H.kursAuto&&S.kurs?'Otomatis dari '+esc(S.kurs.source):''}</div></div>
         <div><label>Produk di formula</label><div class="inp" style="background:var(--soft);font-weight:800">${(S.data.formula||[]).length} produk</div></div>
       </div></div>
     <div class="panel"><div class="tw lim"><table>
